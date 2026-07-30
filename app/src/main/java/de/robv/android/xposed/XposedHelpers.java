@@ -30,7 +30,7 @@ public class XposedHelpers {
 
     public static XC_MethodHook.Unhook findAndHookMethod(String className, ClassLoader classLoader, String methodName, Object... parameterTypesAndCallback) {
         Class<?> clazz = findClass(className, classLoader);
-        if (clazz == null) throw new ClassNotFoundException(className).fillInStackTrace();
+        if (clazz == null) throw new RuntimeException("Class not found: " + className);
         return findAndHookMethod(clazz, methodName, parameterTypesAndCallback);
     }
 }
