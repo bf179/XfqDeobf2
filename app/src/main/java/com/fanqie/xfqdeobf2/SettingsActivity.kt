@@ -207,7 +207,7 @@ class SettingsActivity : AppCompatActivity() {
                   "5. 图片将自动解混淆并保存到 Pictures/FanqieDeobf"
             textSize = 14f
             setTextColor(Color.parseColor("#666666"))
-            lineSpacing = dp(4).toFloat(), 1f
+            setLineSpacing(dp(4).toFloat(), 1f)
         })
 
         scroll.addView(root)
