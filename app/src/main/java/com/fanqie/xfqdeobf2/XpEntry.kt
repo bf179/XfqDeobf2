@@ -32,7 +32,17 @@ class XpEntry : IXposedHookLoadPackage {
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
         if (lpparam.packageName != QQ_PACKAGE) return
 
-        SettingsActivity.init(android.app.ActivityThread.currentApplication() ?: return)
+        val ctx = try {
+            // Get application context via ActivityThread (available in LSPosed)
+            val atClass = Class.forName("android.app.ActivityThread")
+            val currentAt = atClass.getMethod("currentActivityThread").invoke(null)
+            atClass.getMethod("getApplication").invoke(currentAt) as? android.content.Context
+        } catch (e: Throwable) {
+            XposedBridge.log("$TAG: Failed to get app context: $e")
+            null
+        } ?: return
+
+        SettingsActivity.init(ctx)
         XposedBridge.log("$TAG: Loaded into QQ")
 
         try {

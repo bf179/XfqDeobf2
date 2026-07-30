@@ -31,14 +31,14 @@ class SettingsActivity : AppCompatActivity() {
 
         var enabled: Boolean
             get() = prefs?.getBoolean(KEY_ENABLED, true) ?: true
-            set(v) = prefs?.edit()?.putBoolean(KEY_ENABLED, v)?.apply()
+            set(v) { prefs?.edit()?.putBoolean(KEY_ENABLED, v)?.apply() }
 
         var deobfKey: Double
             get() {
                 val raw = prefs?.getString(KEY_DEOBF_KEY, null) ?: return DEFAULT_KEY
                 return raw.toDoubleOrNull() ?: DEFAULT_KEY
             }
-            set(v) = prefs?.edit()?.putString(KEY_DEOBF_KEY, v.toString())?.apply()
+            set(v) { prefs?.edit()?.putString(KEY_DEOBF_KEY, v.toString())?.apply() }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
