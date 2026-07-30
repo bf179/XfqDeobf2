@@ -138,16 +138,36 @@ class XpEntry : IXposedHookLoadPackage {
 
     private fun createMenuItemListHook(): XC_MethodHook {
         return object : XC_MethodHook() {
+            override fun beforeHookedMethod(param: MethodHookParam) {
+                // Log EVERY menu-method call for diagnosis
+                val cls = param.method.declaringClass.simpleName
+                val name = param.method.name
+                XposedBridge.log("$TAG: >>> MENU METHOD CALLED: $cls.$name(), thisObject=${param.thisObject?.javaClass?.simpleName ?: "null"}")
+            }
+
             override fun afterHookedMethod(param: MethodHookParam) {
-                if (!SettingsActivity.enabled) return
+                if (!SettingsActivity.enabled) {
+                    XposedBridge.log("$TAG: Menu hook: disabled, skipping")
+                    return
+                }
 
                 try {
                     val result = param.result
-                    // Handle both List and Array returns
-                    if (result is MutableList<*>) {
+                    if (result == null) {
+                        XposedBridge.log("$TAG: Menu hook: result is null, skipping")
+                        return
+                    }
+
+                    XposedBridge.log("$TAG: Menu hook: result type=${result.javaClass.name}, size=${getResultSize(result)}")
+
+                    // Handle List returns (including ArrayList, etc.)
+                    if (result is List<*>) {
+                        @Suppress("UNCHECKED_CAST")
                         addMenuItemToList(param, result as MutableList<Any>)
-                    } else if (result != null && result.javaClass.isArray) {
+                    } else if (result.javaClass.isArray) {
                         addMenuItemToArray(param, result)
+                    } else {
+                        XposedBridge.log("$TAG: Menu hook: result type not handled: ${result.javaClass.name}")
                     }
                 } catch (e: Throwable) {
                     XposedBridge.log("$TAG: Error in menu hook: $e")
@@ -156,31 +176,82 @@ class XpEntry : IXposedHookLoadPackage {
         }
     }
 
-    private fun addMenuItemToList(param: XC_MethodHook.MethodHookParam, list: MutableList<Any>) {
-        if (list.isEmpty()) return
+    private fun getResultSize(result: Any): Int {
+        return try {
+            if (result is List<*>) result.size
+            else if (result.javaClass.isArray) java.lang.reflect.Array.getLength(result)
+            else -1
+        } catch (e: Throwable) { -1 }
+    }
 
-        val ctx = getContext() ?: return
-        val imagePath = getImagePathFromComponent(param.thisObject) ?: return
-        val menuItem = createQQMenuItem(ctx, imagePath) ?: return
+    private fun addMenuItemToList(param: XC_MethodHook.MethodHookParam, list: MutableList<Any>) {
+        val initialSize = list.size
+        XposedBridge.log("$TAG: addMenuItemToList: initialSize=$initialSize")
+
+        val ctx = getContext()
+        if (ctx == null) {
+            XposedBridge.log("$TAG: addMenuItemToList: getContext() returned null!")
+            return
+        }
+        XposedBridge.log("$TAG: addMenuItemToList: got context")
+
+        val component = param.thisObject
+        val imagePath = getImagePathFromComponent(component)
+        if (imagePath == null) {
+            XposedBridge.log("$TAG: addMenuItemToList: getImagePathFromComponent(${component?.javaClass?.simpleName}) returned null!")
+            XposedBridge.log("$TAG: Component class hierarchy: ${component?.javaClass?.let { getClassHierarchy(it) }}")
+            return
+        }
+        XposedBridge.log("$TAG: addMenuItemToList: imagePath=$imagePath")
+
+        val menuItem = createQQMenuItem(ctx, imagePath)
+        if (menuItem == null) {
+            XposedBridge.log("$TAG: addMenuItemToList: createQQMenuItem returned null!")
+            return
+        }
+        XposedBridge.log("$TAG: addMenuItemToList: menuItem created, class=${menuItem.javaClass.name}")
 
         list.add(menuItem)
-        XposedBridge.log("$TAG: Added deobfuscate menu item")
+        XposedBridge.log("$TAG: addMenuItemToList: SUCCESS! List size now ${list.size}")
     }
 
     private fun addMenuItemToArray(param: XC_MethodHook.MethodHookParam, arr: Any) {
         val len = java.lang.reflect.Array.getLength(arr)
-        if (len == 0) return
+        XposedBridge.log("$TAG: addMenuItemToArray: initialLen=$len")
 
-        val ctx = getContext() ?: return
-        val imagePath = getImagePathFromComponent(param.thisObject) ?: return
-        val menuItem = createQQMenuItem(ctx, imagePath) ?: return
+        val ctx = getContext()
+        if (ctx == null) {
+            XposedBridge.log("$TAG: addMenuItemToArray: getContext() returned null!")
+            return
+        }
+        val imagePath = getImagePathFromComponent(param.thisObject)
+        if (imagePath == null) {
+            XposedBridge.log("$TAG: addMenuItemToArray: getImagePathFromComponent returned null!")
+            return
+        }
+        val menuItem = createQQMenuItem(ctx, imagePath)
+        if (menuItem == null) {
+            XposedBridge.log("$TAG: addMenuItemToArray: createQQMenuItem returned null!")
+            return
+        }
 
         val componentType = arr.javaClass.componentType
         val newArr = java.lang.reflect.Array.newInstance(componentType, len + 1)
         System.arraycopy(arr, 0, newArr, 0, len)
         java.lang.reflect.Array.set(newArr, len, menuItem)
         param.result = newArr
-        XposedBridge.log("$TAG: Added deobfuscate menu item to array")
+        XposedBridge.log("$TAG: addMenuItemToArray: SUCCESS! New len=${len + 1}")
+    }
+
+    private fun getClassHierarchy(clazz: Class<*>): String {
+        val sb = StringBuilder()
+        var c: Class<*>? = clazz
+        while (c != null && c != Any::class.java) {
+            if (sb.isNotEmpty()) sb.append(" -> ")
+            sb.append(c.simpleName)
+            c = c.superclass
+        }
+        return sb.toString()
     }
 
     // ---- QQ Menu Item Creation ----
@@ -194,8 +265,9 @@ class XpEntry : IXposedHookLoadPackage {
                 "com.tencent.qqnt.aio.menu.ui.AbstractQQCustomMenuItem", classLoader
             )
             if (menuItemClass != null) {
+                XposedBridge.log("$TAG: Found AbstractQQCustomMenuItem, creating proxy")
                 val handler = Handler(Looper.getMainLooper())
-                return Proxy.newProxyInstance(classLoader, arrayOf<Class<*>>(menuItemClass)) { _, method, args ->
+                val proxy = Proxy.newProxyInstance(classLoader, arrayOf<Class<*>>(menuItemClass)) { _, method, args ->
                     when (method.name) {
                         "getTitle" -> "解混淆"
                         "onClick" -> {
@@ -213,6 +285,10 @@ class XpEntry : IXposedHookLoadPackage {
                         }
                     }
                 }
+                XposedBridge.log("$TAG: AbstractQQCustomMenuItem proxy created successfully")
+                return proxy
+            } else {
+                XposedBridge.log("$TAG: AbstractQQCustomMenuItem class not found")
             }
         } catch (e: Throwable) {
             XposedBridge.log("$TAG: AbstractQQCustomMenuItem proxy failed: $e")
@@ -224,8 +300,9 @@ class XpEntry : IXposedHookLoadPackage {
                 "com.tencent.qqnt.aio.menu.ui.QQCustomMenuItem", classLoader
             )
             if (menuItemClass != null) {
+                XposedBridge.log("$TAG: Found QQCustomMenuItem, creating proxy")
                 val handler = Handler(Looper.getMainLooper())
-                return Proxy.newProxyInstance(classLoader, arrayOf<Class<*>>(menuItemClass)) { _, method, args ->
+                val proxy = Proxy.newProxyInstance(classLoader, arrayOf<Class<*>>(menuItemClass)) { _, method, args ->
                     when (method.name) {
                         "getTitle" -> "解混淆"
                         "onClick" -> {
@@ -243,11 +320,16 @@ class XpEntry : IXposedHookLoadPackage {
                         }
                     }
                 }
+                XposedBridge.log("$TAG: QQCustomMenuItem proxy created successfully")
+                return proxy
+            } else {
+                XposedBridge.log("$TAG: QQCustomMenuItem class not found either")
             }
         } catch (e: Throwable) {
             XposedBridge.log("$TAG: QQCustomMenuItem proxy failed: $e")
         }
 
+        XposedBridge.log("$TAG: No QQ menu item class found - neither AbstractQQCustomMenuItem nor QQCustomMenuItem")
         return null
     }
 
