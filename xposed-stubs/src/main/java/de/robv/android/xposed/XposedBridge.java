@@ -1,10 +1,9 @@
 package de.robv.android.xposed;
 
-import android.util.Log;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Member;
-import java.lang.reflect.Method;
-import java.util.Arrays;
 
 public class XposedBridge {
 
@@ -15,11 +14,13 @@ public class XposedBridge {
     }
 
     public static void log(String msg) {
-        Log.i("Xposed", msg);
+        System.out.println("[Xposed] " + msg);
     }
 
     public static void log(Throwable t) {
-        Log.e("Xposed", Log.getStackTraceString(t));
+        StringWriter sw = new StringWriter();
+        t.printStackTrace(new PrintWriter(sw));
+        System.out.println("[Xposed] " + sw.toString());
     }
 
     public static XC_MethodHook.Unhook hookMethod(Member member, XC_MethodHook callback) {
