@@ -260,8 +260,14 @@ class XpEntry : IXposedHookLoadPackage {
                     return field.get(component) as? Context
                 }
             }
-            // Fallback: use Application context
-            return android.app.ActivityThread.currentApplication()
+            // Fallback: use Application context via reflection
+            try {
+                val atClass = Class.forName("android.app.ActivityThread")
+                val currentAt = atClass.getMethod("currentActivityThread").invoke(null)
+                return atClass.getMethod("getApplication").invoke(currentAt) as? Context
+            } catch (e2: Throwable) {
+                return null
+            }
         } catch (e: Throwable) {
             return null
         }

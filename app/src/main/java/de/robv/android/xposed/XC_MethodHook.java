@@ -4,6 +4,12 @@ public abstract class XC_MethodHook {
     public XC_MethodHook() {}
     public XC_MethodHook(int priority) {}
 
+    public static class Unhook {
+        private final java.lang.reflect.Member member;
+        public Unhook(java.lang.reflect.Member member) { this.member = member; }
+        public java.lang.reflect.Member getHookedMethod() { return member; }
+    }
+
     public static class MethodHookParam {
         public Object thisObject;
         public Object[] args;

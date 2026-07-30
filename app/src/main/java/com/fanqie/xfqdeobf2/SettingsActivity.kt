@@ -19,7 +19,7 @@ class SettingsActivity : AppCompatActivity() {
         private const val PREFS_NAME = "xfqdeobf2_prefs"
         private const val KEY_ENABLED = "enabled"
         private const val KEY_DEOBF_KEY = "deobf_key"
-        const val DEFAULT_KEY = (sqrt(5.0) - 1.0) / 2.0 // 黄金比例共轭
+        val DEFAULT_KEY = (sqrt(5.0) - 1.0) / 2.0 // 黄金比例共轭
 
         private var prefs: SharedPreferences? = null
 
